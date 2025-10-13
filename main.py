@@ -128,12 +128,21 @@ async def on_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = q.data.split(":")[1]
     context.user_data["lang"] = lang
 
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Toshkent davlat iqtisodiyot universiteti", callback_data="uni:TDIU")],
-        [InlineKeyboardButton("Qarshi davlat universiteti", callback_data="uni:QDU")],
-        [InlineKeyboardButton("Qoraqalpoq davlat universiteti", callback_data="uni:KDU")],
-        [InlineKeyboardButton("Farg'ona davlat universiteti", callback_data="uni:FDU")],
-    ])
+    if lang == "uz":
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Toshkent davlat iqtisodiyot universiteti", callback_data="uni:TDIU")],
+            [InlineKeyboardButton("Qarshi davlat universiteti", callback_data="uni:QDU")],
+            [InlineKeyboardButton("Qoraqalpoq davlat universiteti", callback_data="uni:KDU")],
+            [InlineKeyboardButton("Farg‘ona davlat universiteti", callback_data="uni:FDU")],
+        ])
+    else:  # Russian
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Ташкентский государственный экономический университет", callback_data="uni:TDIU")],
+            [InlineKeyboardButton("Каршинский государственный университет", callback_data="uni:QDU")],
+            [InlineKeyboardButton("Каракалпакский государственный университет", callback_data="uni:KDU")],
+            [InlineKeyboardButton("Ферганский государственный университет", callback_data="uni:FDU")],
+        ])
+
     await q.message.reply_text(t(lang, "university"), reply_markup=kb)
     return UNI
 
