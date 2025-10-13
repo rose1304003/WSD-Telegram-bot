@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-World Savings Day Contest Bot (UZ/RU; file-based registry)
+World Savings Day Contest Bot (UZ/RU; file-based registry + video saving)
 
 Features:
 • Language choice (UZ/RU)
 • Registration flow: greeting → university → study year → full name → phone → video
 • File-based registry (JSON)
+• Video downloading (saved under /videos)
 • Admin DM notifications
 • Admin commands: /whoami, /registered_count, /broadcast
 """
@@ -20,9 +21,8 @@ from typing import List, Dict, Any
 from dotenv import load_dotenv
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
-    ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,
+    ReplyKeyboardRemove
 )
-from telegram.constants import ParseMode
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ConversationHandler, ContextTypes, filters
@@ -38,6 +38,8 @@ LOCAL_TZ = os.getenv("LOCAL_TZ", "Asia/Tashkent")
 TZ = ZoneInfo(LOCAL_TZ)
 REG_DB_PATH = Path(os.getenv("REG_DB_PATH", "data/contest.json"))
 REG_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+VIDEOS_DIR = Path("videos")
+VIDEOS_DIR.mkdir(exist_ok=True)
 
 def parse_admins(raw: str | None) -> List[int]:
     if not raw:
@@ -77,17 +79,9 @@ def t(lang: str, key: str) -> str:
             "ru": "🎥 Теперь отправьте видеоматериал для конкурса (в формате MP4, хорошего качества):"
         },
         "done": {
-            "uz": "🎉 Barcha ma'lumotlaringiz qabul qilindi. Rahmat!",
-            "ru": "🎉 Вся информация получена. Спасибо!"
+            "uz": "🎉 Barcha ma'lumotlaringiz va videosiz qabul qilindi. Rahmat!",
+            "ru": "🎉 Вся информация и ваше видео получены. Спасибо!"
         },
-        "admins_only": {
-            "uz": "Bu buyruq faqat adminlar uchun.",
-            "ru": "Эта команда доступна только администраторам."
-        },
-        "nobody": {
-            "uz": "Hali hech kim ro'yxatdan o'tmagan.",
-            "ru": "Пока никто не зарегистрировался."
-        }
     }
     return texts[key][lang if lang in ("uz", "ru") else "uz"]
 
@@ -135,7 +129,7 @@ async def on_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Qoraqalpoq davlat universiteti", callback_data="uni:KDU")],
             [InlineKeyboardButton("Farg‘ona davlat universiteti", callback_data="uni:FDU")],
         ])
-    else:  # Russian
+    else:
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("Ташкентский государственный экономический университет", callback_data="uni:TDIU")],
             [InlineKeyboardButton("Каршинский государственный университет", callback_data="uni:QDU")],
@@ -150,7 +144,6 @@ async def on_uni(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     context.user_data["university"] = q.data.split(":")[1]
-
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("1-bosqich / 1 курс", callback_data="year:1")],
         [InlineKeyboardButton("2-bosqich / 2 курс", callback_data="year:2")],
@@ -180,18 +173,36 @@ async def on_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.video:
         return await update.message.reply_text("❗ Iltimos, MP4 formatdagi video yuboring.")
-    vid_id = update.message.video.file_id
     lang = context.user_data.get("lang", "uz")
+    video = update.message.video
+    user = update.effective_user
 
+    # Generate unique filename
+    safe_name = (
+        context.user_data.get("fullname", "unknown")
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace("\\", "_")
+    )
+    filename = f"{safe_name}_{user.id}_{datetime.now(TZ).strftime('%Y%m%d_%H%M%S')}.mp4"
+    filepath = VIDEOS_DIR / filename
+
+    # Download video
+    file = await context.bot.get_file(video.file_id)
+    await file.download_to_drive(filepath)
+    log.info(f"Video saved: {filepath}")
+
+    # Store in registry
     rec = {
-        "id": update.effective_user.id,
+        "id": user.id,
         "ts": datetime.now(TZ).isoformat(),
         "lang": lang,
         "university": context.user_data.get("university"),
         "year": context.user_data.get("year"),
         "fullname": context.user_data.get("fullname"),
         "phone": context.user_data.get("phone"),
-        "video_file_id": vid_id,
+        "video_file_id": video.file_id,
+        "video_path": str(filepath),
     }
     add_record(rec)
 
@@ -199,15 +210,17 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Notify admins
     summary = (
+        f"🆕 Yangi ishtirokchi:\n"
         f"🎓 {rec['university']}\n"
         f"📚 {rec['year']}-bosqich\n"
         f"👤 {rec['fullname']}\n"
         f"📞 {rec['phone']}\n"
-        f"🆔 {rec['id']}"
+        f"🆔 {rec['id']}\n"
+        f"🎥 Video fayl: {filename}"
     )
     for aid in ORGANIZER_IDS:
         try:
-            await context.bot.send_message(chat_id=aid, text="🆕 Yangi ishtirokchi:\n" + summary)
+            await context.bot.send_message(chat_id=aid, text=summary)
         except Exception as e:
             log.warning("Admin DM failed: %s", e)
 
