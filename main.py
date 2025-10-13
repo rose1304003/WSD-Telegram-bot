@@ -208,7 +208,7 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(t(lang, "done"), reply_markup=ReplyKeyboardRemove())
 
-    # Notify admins
+    # Notify admins (summary + video)
     summary = (
         f"🆕 Yangi ishtirokchi:\n"
         f"🎓 {rec['university']}\n"
@@ -218,9 +218,16 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🆔 {rec['id']}\n"
         f"🎥 Video fayl: {filename}"
     )
+
     for aid in ORGANIZER_IDS:
         try:
             await context.bot.send_message(chat_id=aid, text=summary)
+            # Forward original video to admins
+            await context.bot.forward_message(
+                chat_id=aid,
+                from_chat_id=update.message.chat.id,
+                message_id=update.message.message_id
+            )
         except Exception as e:
             log.warning("Admin DM failed: %s", e)
 
