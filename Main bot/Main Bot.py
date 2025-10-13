@@ -61,11 +61,11 @@ def t(lang: str, key: str) -> str:
             "ru": "🎓 Выберите университет:"
         },
         "year": {
-            "uz": "📚 Qaysi bosqichda o‘qiysiz?",
+            "uz": "📚 Qaysi bosqichda o'qiysiz?",
             "ru": "📚 На каком курсе вы учитесь?"
         },
         "fullname": {
-            "uz": "👤 To‘liq ism-sharifingizni yozing (pasportdagidek):",
+            "uz": "👤 To'liq ism-sharifingizni yozing (pasportdagidek):",
             "ru": "👤 Напишите полное имя и фамилию (как в паспорте):"
         },
         "phone": {
@@ -77,7 +77,7 @@ def t(lang: str, key: str) -> str:
             "ru": "🎥 Теперь отправьте видеоматериал для конкурса (в формате MP4, хорошего качества):"
         },
         "done": {
-            "uz": "🎉 Barcha maʼlumotlaringiz qabul qilindi. Rahmat!",
+            "uz": "🎉 Barcha ma'lumotlaringiz qabul qilindi. Rahmat!",
             "ru": "🎉 Вся информация получена. Спасибо!"
         },
         "admins_only": {
@@ -85,7 +85,7 @@ def t(lang: str, key: str) -> str:
             "ru": "Эта команда доступна только администраторам."
         },
         "nobody": {
-            "uz": "Hali hech kim ro‘yxatdan o‘tmagan.",
+            "uz": "Hali hech kim ro'yxatdan o'tmagan.",
             "ru": "Пока никто не зарегистрировался."
         }
     }
@@ -132,7 +132,7 @@ async def on_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Toshkent davlat iqtisodiyot universiteti", callback_data="uni:TDIU")],
         [InlineKeyboardButton("Qarshi davlat universiteti", callback_data="uni:QDU")],
         [InlineKeyboardButton("Qoraqalpoq davlat universiteti", callback_data="uni:KDU")],
-        [InlineKeyboardButton("Farg‘ona davlat universiteti", callback_data="uni:FDU")],
+        [InlineKeyboardButton("Farg'ona davlat universiteti", callback_data="uni:FDU")],
     ])
     await q.message.reply_text(t(lang, "university"), reply_markup=kb)
     return UNI
