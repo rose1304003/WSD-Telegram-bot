@@ -192,6 +192,7 @@ async def on_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = context.user_data.get("lang", "uz")
 
+    # Accept both Telegram video messages and attached files
     video_obj = update.message.video or (
         update.message.document if update.message.document and update.message.document.mime_type.startswith("video/") else None
     )
@@ -214,13 +215,29 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     filename = f"{safe_name}_{user.id}_{datetime.now(TZ).strftime('%Y%m%d_%H%M%S')}.mp4"
     filepath = VIDEOS_DIR / filename
 
-    try:
-        file = await context.bot.get_file(video_obj.file_id)
-        await file.download_to_drive(filepath)
-    except Exception as e:
-        log.error(f"Download failed: {e}")
-        return await msg.edit_text(t(lang, "download_error"))
+    # --- Download with retry mechanism ---
+    success = False
+    last_error = None
+    for attempt in range(3):
+        try:
+            file = await context.bot.get_file(video_obj.file_id)
+            await file.download_to_drive(filepath)
+            success = True
+            break
+        except Exception as e:
+            last_error = e
+            log.warning(f"Download attempt {attempt + 1} failed: {e}")
+            await asyncio.sleep(3)  # wait 3 seconds before next attempt
 
+    if not success:
+        log.error(f"Download failed after 3 attempts: {last_error}")
+        return await msg.edit_text(
+            "⚠️ "
+            + ("Videoni yuklab bo‘lmadi. Iltimos, keyinroq urinib ko‘ring." if lang == "uz"
+               else "⚠️ Не удалось загрузить видео даже после нескольких попыток. Попробуйте позже.")
+        )
+
+    # --- Save record in registry ---
     rec = {
         "id": user.id,
         "ts": datetime.now(TZ).isoformat(),
@@ -236,6 +253,7 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await msg.edit_text(t(lang, "done"), reply_markup=ReplyKeyboardRemove())
 
+    # --- Notify admins ---
     summary = (
         f"🆕 {'Yangi ishtirokchi' if lang == 'uz' else 'Новый участник'}:\n"
         f"🎓 {rec['university']}\n"
@@ -258,6 +276,7 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             log.warning(f"Admin DM failed: {e}")
 
     return ConversationHandler.END
+
 
 # ---------- Admin ----------
 def _is_admin(uid: int) -> bool:
