@@ -58,31 +58,47 @@ def t(lang: str, key: str) -> str:
     texts = {
         "start": {
             "uz": "👋 Salom! Bu bot orqali World Savings Day tanlovida ishtirok etish uchun videomavzuni yuborishingiz mumkin. Iltimos, quyidagi bosqichlarni ketma-ket bajaring.\n\n👉 Tilni tanlang:",
-            "ru": "👋 Здравствуйте! С помощью этого бота вы можете отправить видеоматериал для участия в конкурсе World Savings Day. Пожалуйста, выполните следующие шаги.\n\n👉 Выберите язык:"
+            "ru": "👋 Здравствуйте! С помощью этого бота вы можете отправить видеоролик для участия в конкурсе World Savings Day. Пожалуйста, выполните следующие шаги.\n\n👉 Выберите язык:",
         },
         "university": {
             "uz": "🎓 Universitetni tanlang:",
-            "ru": "🎓 Выберите университет:"
+            "ru": "🎓 Выберите университет:",
         },
         "year": {
             "uz": "📚 Qaysi bosqichda o'qiysiz?",
-            "ru": "📚 На каком курсе вы учитесь?"
+            "ru": "📚 На каком курсе вы учитесь?",
         },
         "fullname": {
             "uz": "👤 To'liq ism-sharifingizni yozing (pasportdagidek):",
-            "ru": "👤 Напишите полное имя и фамилию (как в паспорте):"
+            "ru": "👤 Напишите полное имя и фамилию (как в паспорте):",
         },
         "phone": {
             "uz": "📞 Telefon raqamingizni yozing:",
-            "ru": "📞 Напишите свой номер телефона:"
+            "ru": "📞 Напишите свой номер телефона:",
         },
         "video": {
-            "uz": "🎥 Endi konkurs uchun videomaterialni yuboring (MP4 formatda, sifatli bo‘lsin):",
-            "ru": "🎥 Теперь отправьте видеоматериал для конкурса (в формате MP4, хорошего качества):"
+            "uz": "🎥 Endi tanlov uchun videoni yuboring (MP4 formatda, sifatli bo‘lsin):",
+            "ru": "🎥 Теперь отправьте видео для конкурса (в формате MP4, хорошего качества):",
         },
         "done": {
-            "uz": "🎉 Barcha ma'lumotlaringiz va videosiz qabul qilindi. Rahmat!",
-            "ru": "🎉 Вся информация и ваше видео получены. Спасибо!"
+            "uz": "🎉 Barcha ma'lumotlaringiz va videongiz qabul qilindi. Rahmat!",
+            "ru": "🎉 Вся информация и ваше видео получены. Спасибо!",
+        },
+        "invalid_video": {
+            "uz": "❗ Iltimos, MP4 formatdagi video yuboring (fayl sifatida ham bo‘lishi mumkin).",
+            "ru": "❗ Пожалуйста, отправьте видео в формате MP4 (можно как файл).",
+        },
+        "too_large": {
+            "uz": "❗ Fayl hajmi juda katta. Iltimos, 200 MB dan kichik video yuboring.",
+            "ru": "❗ Файл слишком большой. Отправьте видео размером до 200 МБ.",
+        },
+        "downloading": {
+            "uz": "📥 Videongiz yuklanmoqda, biroz kuting...",
+            "ru": "📥 Ваше видео загружается, пожалуйста, подождите...",
+        },
+        "download_error": {
+            "uz": "⚠️ Videoni yuklab bo‘lmadi. Iltimos, keyinroq urinib ko‘ring.",
+            "ru": "⚠️ Не удалось загрузить видео. Попробуйте позже.",
         },
     }
     return texts[key][lang if lang in ("uz", "ru") else "uz"]
@@ -110,11 +126,11 @@ def add_record(rec: Dict[str, Any]):
 # ---------- Handlers ----------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("UZ", callback_data="lang:uz"),
-         InlineKeyboardButton("RU", callback_data="lang:ru")]
+        [InlineKeyboardButton("🇺🇿 O‘zbekcha", callback_data="lang:uz"),
+         InlineKeyboardButton("🇷🇺 Русский", callback_data="lang:ru")]
     ])
     await update.message.reply_text(
-        f"{t('uz','start')}\n\n{t('ru','start')}", reply_markup=kb
+        f"{t('uz', 'start')}\n\n{t('ru', 'start')}", reply_markup=kb
     )
     return LANG
 
@@ -172,27 +188,23 @@ async def on_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(t(context.user_data["lang"], "video"))
     return VIDEO
 
-# ---------- Video Handler ----------
+# ---------- Video ----------
 async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Accept both Telegram video messages and video files
+    lang = context.user_data.get("lang", "uz")
+
     video_obj = update.message.video or (
         update.message.document if update.message.document and update.message.document.mime_type.startswith("video/") else None
     )
 
     if not video_obj:
-        return await update.message.reply_text("❗ Iltimos, MP4 formatdagi video yuboring (fayl sifatida ham bo‘lishi mumkin).")
+        return await update.message.reply_text(t(lang, "invalid_video"))
 
-    # Check file size
     if video_obj.file_size and video_obj.file_size > 200 * 1024 * 1024:
-        return await update.message.reply_text("❗ Fayl hajmi juda katta. Iltimos, 200 MB dan kichik video yuboring.")
+        return await update.message.reply_text(t(lang, "too_large"))
 
-    lang = context.user_data.get("lang", "uz")
     user = update.effective_user
+    msg = await update.message.reply_text(t(lang, "downloading"))
 
-    # Progress message
-    msg = await update.message.reply_text("📥 Videongiz yuklanmoqda, biroz kuting...")
-
-    # Generate safe file name
     safe_name = (
         context.user_data.get("fullname", "unknown")
         .replace(" ", "_")
@@ -202,16 +214,13 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     filename = f"{safe_name}_{user.id}_{datetime.now(TZ).strftime('%Y%m%d_%H%M%S')}.mp4"
     filepath = VIDEOS_DIR / filename
 
-    # Download video
     try:
         file = await context.bot.get_file(video_obj.file_id)
         await file.download_to_drive(filepath)
-        log.info(f"Video saved: {filepath}")
     except Exception as e:
         log.error(f"Download failed: {e}")
-        return await msg.edit_text("⚠️ Videoni yuklab bo‘lmadi. Iltimos, keyinroq urinib ko‘ring.")
+        return await msg.edit_text(t(lang, "download_error"))
 
-    # Save to registry
     rec = {
         "id": user.id,
         "ts": datetime.now(TZ).isoformat(),
@@ -227,15 +236,14 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await msg.edit_text(t(lang, "done"), reply_markup=ReplyKeyboardRemove())
 
-    # Notify admins
     summary = (
-        f"🆕 Yangi ishtirokchi:\n"
+        f"🆕 {'Yangi ishtirokchi' if lang == 'uz' else 'Новый участник'}:\n"
         f"🎓 {rec['university']}\n"
-        f"📚 {rec['year']}-bosqich\n"
+        f"📚 {rec['year']}-bosqich / курс\n"
         f"👤 {rec['fullname']}\n"
         f"📞 {rec['phone']}\n"
         f"🆔 {rec['id']}\n"
-        f"🎥 Video fayl: {filename}"
+        f"🎥 Fayl / Файл: {filename}"
     )
 
     for aid in ORGANIZER_IDS:
@@ -244,32 +252,32 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.forward_message(
                 chat_id=aid,
                 from_chat_id=update.message.chat.id,
-                message_id=update.message.message_id
+                message_id=update.message.message_id,
             )
         except Exception as e:
-            log.warning("Admin DM failed: %s", e)
+            log.warning(f"Admin DM failed: {e}")
 
     return ConversationHandler.END
 
-# ---------- Admin Commands ----------
+# ---------- Admin ----------
 def _is_admin(uid: int) -> bool:
     return uid in ORGANIZER_IDS
 
 async def whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"Sizning user ID: {update.effective_user.id}")
+    await update.message.reply_text(f"Sizning / Ваш user ID: {update.effective_user.id}")
 
 async def registered_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_admin(update.effective_user.id):
-        return await update.message.reply_text("Adminlar uchun buyruq.")
+        return await update.message.reply_text("Adminlar uchun / Только для админов.")
     data = _load_registry()
-    await update.message.reply_text(f"Jami ishtirokchilar: {len(data)}")
+    await update.message.reply_text(f"Jami / Всего ishtirokchilar: {len(data)}")
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_admin(update.effective_user.id):
-        return await update.message.reply_text("Adminlar uchun buyruq.")
+        return await update.message.reply_text("Adminlar uchun / Только для админов.")
     msg = update.message.text.partition(" ")[2].strip()
     if not msg:
-        return await update.message.reply_text("Foydalanish: /broadcast <matn>")
+        return await update.message.reply_text("Foydalanish: /broadcast <matn>\nИспользование: /broadcast <текст>")
     data = _load_registry()
     ok = fail = 0
     for r in data:
@@ -279,9 +287,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.05)
         except Exception:
             fail += 1
-    await update.message.reply_text(f"Yuborildi: {ok}, Xato: {fail}")
+    await update.message.reply_text(f"Yuborildi / Отправлено: {ok}, Xato / Ошибка: {fail}")
 
-# ---------- Application ----------
+# ---------- App ----------
 def build_app() -> Application:
     app = Application.builder().token(BOT_TOKEN).build()
 
