@@ -40,8 +40,10 @@ TZ = ZoneInfo(LOCAL_TZ)
 REG_DB_PATH = Path(os.getenv("REG_DB_PATH", "data/contest.json"))
 REG_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-VIDEOS_DIR = Path("videos")
-VIDEOS_DIR = Path("/tmp/videos")  # safer for cloud environments
+VIDEOS_DIR = Path("/tmp/videos")
+VIDEOS_DIR.mkdir(exist_ok=True)
+
+
 def parse_admins(raw: str | None) -> List[int]:
     if not raw:
         return []
