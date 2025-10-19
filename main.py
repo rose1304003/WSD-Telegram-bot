@@ -216,19 +216,27 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     filename = f"{safe_name}_{user.id}_{datetime.now(TZ).strftime('%Y%m%d_%H%M%S')}.mp4"
     filepath = VIDEOS_DIR / filename
 
-    # --- Download with retry mechanism ---
+        # --- Download with streaming mode (fix for 20MB+ files) ---
     success = False
     last_error = None
     for attempt in range(3):
         try:
             file = await context.bot.get_file(video_obj.file_id)
-            await file.download_to_drive(filepath)
+
+            # Use async streaming to avoid Telegram "file too big" error
+            async with context.bot.session.get(file.file_path) as response:
+                response.raise_for_status()
+                with open(filepath, "wb") as f:
+                    async for chunk in response.content.iter_chunked(1024 * 64):
+                        f.write(chunk)
+
             success = True
+            log.info(f"Video saved via stream: {filepath}")
             break
         except Exception as e:
             last_error = e
             log.warning(f"Download attempt {attempt + 1} failed: {e}")
-            await asyncio.sleep(3)  # wait 3 seconds before next attempt
+            await asyncio.sleep(3)
 
     if not success:
         log.error(f"Download failed after 3 attempts: {last_error}")
@@ -237,6 +245,7 @@ async def on_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             + ("Videoni yuklab bo‘lmadi. Iltimos, keyinroq urinib ko‘ring." if lang == "uz"
                else "⚠️ Не удалось загрузить видео даже после нескольких попыток. Попробуйте позже.")
         )
+
 
     # --- Save record in registry ---
     rec = {
